@@ -1,0 +1,41 @@
+{
+    "name": "form",
+    "description": "An easy way to create, parse, and validate forms",
+    "main": "./lib/index.js",
+    "author": "Olivier Hardy",
+    "version": "0.1.1",
+    "private": true,
+    "repository": {
+        "type": "git",
+        "url": "http://github.com/ohardy/node-form.git"
+    },
+        "engines": {
+        "node": ">=0.8.0"
+    },
+    "bugs": {
+        "url": "http://github.com/ohardy/node-form/issues"
+    },
+    "dependencies": {
+        "async": "*",
+        "underscore": "*",
+        "coffee-script": "*",
+        "underscore.string": "*"
+    },
+    "devDependencies": {
+        "mocha": "*",
+        "should": "*",
+        "jscoverage": "*"
+    },
+    "licenses": [{
+        "type": "MIT",
+        "url": "http://github.com/ohardy/node-form/raw/master/LICENSE"
+    }],
+    "scripts" : {
+        "pretest"       : "cake build",
+        "preinstall"    : "cake build",
+        "prepublish"    : "cake build",
+        "test"          : "cake test",
+        "coverage"      : "cake cov",
+        "start"         : "cake watch"
+    }
+}

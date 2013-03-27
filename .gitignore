@@ -1,4 +1,8 @@
+*.sublime-project
+*.sublime-workspace
 lib-cov
+.DS_Store
+lib/*
 *.seed
 *.log
 *.csv
