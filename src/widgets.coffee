@@ -54,7 +54,7 @@ class Widget
   @errors: (field, content) ->
     classes = []
     if field.errors.length > 0
-      messages = field.field.messages
+      messages = field.messages
       classes.push 'invalid'
 
       for error in field.errors
@@ -131,8 +131,8 @@ class URLWidget extends Widget
 
 class CheckboxWidget extends TextWidget
 class CheckboxWidget extends TextWidget
-class SelectWidget extends TextWidget
-class RadioWidget extends TextWidget
+class SelectWidget   extends TextWidget
+class RadioWidget    extends TextWidget
 
 exports.html           = html
 exports.Widget         = Widget

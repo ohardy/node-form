@@ -10,30 +10,118 @@ jade        = require 'jade'
 parse       = url.parse
 html        = require('./widgets').html
 
-class BoundForm
-  constructor: (@form, data) ->
+class Schema
+  constructor: (fields, options) ->
+    options     = options            or {}
+    @messages   = options.messages   or {}
+    @validators = options.validators or []
+
+    @fields     = {}
+
+    @addField fieldName, field for fieldName, field of fields
+
+  addField: (name, options) ->
+    if (typeof options isnt 'string') and (options instanceof fields.Field)
+      @addField name, type: options
+    else
+      options.name = name
+      if options.type?
+        FieldClass = fields.getFieldClass options.type
+      else
+        FieldClass = fields.getFieldClass options
+
+        options =
+          name: name
+
+      if FieldClass?
+        delete options.type
+        @fields[name] = new FieldClass options
+      else
+        throw new Error 'Invalid field type'
+
+class ModelSchema extends Schema
+  constructor: (@model, fields, options) ->
+    @bridge = MongooseBrigde
+
+    new_fields = {}
+    for fieldName in fields
+      field = @model.schema.paths[fieldName]
+      if not field?
+        throw new Error("Field #{fieldName} doesn't exist in model #{@model.modelName}")
+      field = @bridge.toField field
+      new_fields[field.name] = field
+
+    super new_fields, options
+
+# class BoundForm
+#   constructor: (@form, data) ->
+#     @bound         = true
+#     @isValid       = false
+#     @fields        = {}
+#     @errors        = []
+#     @fieldsErrors  = []
+
+#     for fieldName, field of @form.fields
+#       @fields[fieldName] = field.bind data[fieldName], @
+
+#   handle: (obj, callbacks) -> @form.handle obj, callbacks
+#   toHTML: (args..., callback) -> @form.toHTML.apply(@, args)
+#   doc: (doc) ->
+#     @form = @form.doc doc
+
+
+
+class Form
+  constructor: (@schema, options) ->
+    options     = options or {}
+
+    @messages   = options.messages or {}
+    @validators = options.validators or []
+    @bound      = false
+    @isValid    = true
+    @bridge     = null
+    @model      = null
+
+    @doc = (doc) ->
+      newForm = new Form @schema, options
+      newForm._doc doc
+      newForm
+
+    @bind = (data) ->
+      newForm = new Form @schema, options
+      newForm._bind data
+      newForm
+
+  _bind: (data) ->
     @bound         = true
     @isValid       = false
-    @fields        = {}
     @errors        = []
     @fieldsErrors  = []
+    @fields        ?= {}
 
-    for fieldName, field of @form.fields
+    for fieldName, field of @schema.fields
       @fields[fieldName] = field.bind data[fieldName], @
+    return
 
-  handle: (args...) -> @form.handle args...
-  toHTML: (args..., callback) -> @form.toHTML.apply(@, args)
+  _doc: (@doc) ->
+    @_bind @doc
+
+    @bound = false
+
   validate: (callback) ->
-    async.concat (field for fieldName, field of @fields), (field, fieldCallback) =>
+    fields = @fields or @schema.fields
+    async.concat (field for fieldName, field of fields), (field, fieldCallback) =>
       field.validate (err, errors) =>
         fieldCallback null, errors
     , (err, @fieldsErrors) =>
+      console.log 'Form1.validate : ', err, @fieldsErrors
       @isValid = @fieldsErrors.length is 0
       if @isValid
-        async.concat (validator for validator in @form.validators), (validator, validatorCallback) =>
+        async.concat (validator for validator in @schema.validators), (validator, validatorCallback) =>
           validator @, null, (err, result) ->
             validatorCallback null, result
         , (err, @errors) =>
+          console.log 'Form2.validate : ', err, @errors
           @isValid = @errors.length is 0
           callback null, @
       else
@@ -41,27 +129,6 @@ class BoundForm
 
   save: (args...) ->
     @form.save @, args...
-
-class Form
-  constructor: (fields, options) ->
-    options     = options or {}
-
-    @fields     = {}
-    @messages   = options.messages or {}
-    @validators = options.validators or []
-    @bound      = false
-    @isValid    = false
-    @bridge     = null
-    @model      = null
-
-    if fields.modelName? and fields.schema? and fields.schema.paths?
-      @bridge = MongooseBrigde
-      @model  = fields
-
-    if @bridge?
-      @fields = (@bridge.formWithModel fields).fields
-    else
-      @addField fieldName, field for fieldName, field of fields
 
   save: (boundForm, callback) ->
     if @bridge?
@@ -71,90 +138,30 @@ class Form
 
   toHTML: (args...) ->
     defaultRender = 'ul'
-    # defaultParts  = ['label', 'widget', 'error']
-    # parts = []
     for arg in args
-      # parts.push arg if ['label', 'widget'].indexOf(arg) isnt -1
       render = arg if ['p', 'ul', 'ol'].indexOf(arg) isnt -1
-
-    # if parts.length is 0
-    #   parts = defaultParts
 
     render ?= defaultRender
     renderEltTag = defaultRender
 
     content = []
-    messages = @messages or @form.messages
+    messages = @messages or @schema.messages
+    fields = @fields or @schema.fields
     for error in @errors
       content.push html 'label',
         content : messages[error] or messages['error'] or error
         class   : 'error'
-    for key, field of @fields
+    for key, field of fields
       htmlField = field.toHTML(@, args...)
       content.push "<#{renderEltTag}>#{htmlField}</#{renderEltTag}>"
 
     return content.join ''
 
-    # async.concat @fields , (field, fieldCallback) =>
-    #   field.toHTML args..., callback
-    # , (err, renderedFields) =>
-    #   console.log 'renderedFields : ', renderedFields
-    #   callback()
-      # @isValid = errors.length is 0
-      # callback err, errors
-
-    # jade.renderFile path.normalize(__dirname + "/../../views/emails/register/content.jade"),
-    #   host: app.get("host")
-    #   email: @email
-    #   code: @emailVerification.code
-    #   __i: app.locals.__i
-    # , (err, html) =>
-
-    # Render each field
-    # Render render-ul with fields => field content
-
-    # html = []
-    # renderTag = renderRoot[render]
-    # renderEltTag = renderElt[render]
-    # # renderEltTag = renderRoot[render]
-    # if renderTag?
-    #   html.push "<#{renderTag}>"
-    # if 'error' in parts and @errors.length > 0
-    #   for error in @errors
-    #     html.push "<label class=\"error\">#{@form.messages[error]}</label>"
-
-    # if renderTag?
-    #   html.push "</#{renderTag}>"
-
-    # html.join ''
-
-  addField: (name, fieldOptions) ->
-    if (typeof fieldOptions isnt 'string') and (fieldOptions instanceof fields.Field)
-      @addField name, type: fieldOptions
-    else
-      fieldOptions.name = name
-      if fieldOptions.type?
-        FieldClass = fields.getFieldClass fieldOptions.type
-      else
-        FieldClass = fields.getFieldClass fieldOptions
-
-        fieldOptions =
-          name: name
-
-      if FieldClass?
-        delete fieldOptions.type
-        @fields[name] = new FieldClass fieldOptions
-        # console.log 'after :', name, ' : ', @fields
-      else
-        throw new Error 'Invalid field type'
-
-  bind: (data) ->
-    new BoundForm @, data
-
-  validate: (callback) ->
-    callback null, @
+  # validate: (callback) ->
+  #   callback null, @
 
   getCallback: (obj, callbacks, valid) ->
+    func = null
     if not obj?
       func = callbacks.empty or callbacks.error or callbacks.other
     else if obj not instanceof http.IncomingMessage
@@ -171,6 +178,8 @@ class Form
     return (parse url, 1).query
 
   errors: -> []
+
+  doc: (doc) ->
 
   handle: (obj, callbacks) ->
     callback = @getCallback obj, callbacks
@@ -192,7 +201,8 @@ class Form
         else
           throw new Error('Cannot handle request method: ' + obj.method)
       else if typeof obj is 'object'
-        (@bind obj).validate (err, form) =>
+        binded = @bind obj
+        binded.validate (err, form) =>
           func = @getCallback obj, callbacks, form.isValid
 
           if func?
@@ -206,11 +216,14 @@ class Bridge
 
 class MongooseBrigde extends Bridge
   _fields =
-    String: 'string'
-    Password: 'password'
-    Email: 'email'
-    Date: 'string'
-    Boolean: 'boolean'
+    'String'  : String
+    'Boolean' : Boolean
+    'Date'    : Date
+
+  @toField: (field) ->
+    if field.options.type.name isnt 'ObjectId'
+      name: field.path
+      type: _fields[field.options.type.name]
 
   @save: (boundForm, callback) ->
     updateDocument = (document) ->
@@ -231,13 +244,8 @@ class MongooseBrigde extends Bridge
   @formWithModel: (model) ->
     formOptions = {}
 
-    getField = (field, formName, formCategory) ->
-      if field.options.type.name isnt 'ObjectId'
-        name: field.path
-        type: field.options.type.name
-
     for pathName, field of model.schema.paths
-      field = getField field
+      field = MongooseBrigde.toField field
       if field? and field.type?
         formOptions[field.name] = field.type
 
@@ -245,4 +253,7 @@ class MongooseBrigde extends Bridge
 
 exports.Form      = Form
 exports.create    = (fields, options) ->
-  new Form fields, options
+  new Schema fields, options
+
+exports.createFromModel = (model, fields, options) ->
+  new ModelSchema model, fields, options

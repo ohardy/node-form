@@ -6,48 +6,45 @@ _s         = require 'underscore.string'
 
 alias = {}
 
-class BoundField
-  constructor: (@field, @data, @form) ->
-    @isBound = true
-    @errors  = []
-    @widget  = @field.widget
-    @name    = @field.name
+# class BoundField
+#   constructor: (@field, @data, @form) ->
+#     @bound   = true
+#     @errors  = []
+#     @widget  = @field.widget
+#     @name    = @field.name
 
-  validate: (callback) ->
-    @field.validate @, @form, (err, @errors) =>
-      console.log @name, @errors
-      callback err, @errors
 
-  toHTML: (args..., callback) ->
-    @field.toHTML.apply @, args.concat callback
-    # Get widtget type
-    # Render widget template and return it
 
-    # defaultParts = ['widget']
-    # parts = []
-    # html = []
-    # for arg in args
-    #   parts.push arg if ['label', 'widget', 'error'].indexOf(arg) isnt -1
+#   toHTML: (args..., callback) ->
+#     @field.toHTML.apply @, args.concat callback
+#     # Get widtget type
+#     # Render widget template and return it
 
-    # if parts.length is 0
-    #   parts = defaultParts
+#     # defaultParts = ['widget']
+#     # parts = []
+#     # html = []
+#     # for arg in args
+#     #   parts.push arg if ['label', 'widget', 'error'].indexOf(arg) isnt -1
 
-    # for part in parts
-    #   if part is 'widget'
-    #     classes = ''
-    #     classes = 'invalid' if @errors.length > 0
-    #     html.push @field.widget.toHTML @field, @data, class: classes
-    #   if part is 'label'
-    #     html.push "<label for=\"id_#{@field.name}\">#{_s.capitalize(@field.name)}</label>"
-    #   if part is 'error' and @errors.length > 0
-    #     for error in @errors
-    #       html.push "<label for=\"id_#{@field.name}\" class=\"error\">#{form.messages[error]}</label>"
+#     # if parts.length is 0
+#     #   parts = defaultParts
 
-    # html.join ''
+#     # for part in parts
+#     #   if part is 'widget'
+#     #     classes = ''
+#     #     classes = 'invalid' if @errors.length > 0
+#     #     html.push @field.widget.toHTML @field, @data, class: classes
+#     #   if part is 'label'
+#     #     html.push "<label for=\"id_#{@field.name}\">#{_s.capitalize(@field.name)}</label>"
+#     #   if part is 'error' and @errors.length > 0
+#     #     for error in @errors
+#     #       html.push "<label for=\"id_#{@field.name}\" class=\"error\">#{form.messages[error]}</label>"
+
+#     # html.join ''
 
 class Field
   constructor:  (options) ->
-    options = options or {}
+    options            ?=  {}
     options.required   ?= false
     options.validators ?= []
     options.messages   ?= {}
@@ -62,15 +59,20 @@ class Field
     @validators = @validators.concat options.validators
     @messages   = options.messages
     @errors     = []
-    @isBound    = false
+    @bound      = false
     @errors     = []
     @isValid    = false
     @data       = ''
 
+    @bind = (data, form) ->
+      newField = new @constructor options
+      newField._bind data, form
+      newField
+
   initialize: ->
     @widget = widgets.TextWidget
 
-  validate: (boundField, form, callback) ->
+  validate: (callback) ->
     valid = null
 
     fieldValidators = []
@@ -80,43 +82,26 @@ class Field
     if @validators?
       fieldValidators = fieldValidators.concat @validators
 
-    console.log @name, fieldValidators
-
     async.concat fieldValidators , (validator, validatorCallback) =>
-      validator form, boundField, (err, result) ->
+      validator @form, @, (err, result) ->
         result ?= []
         validatorCallback null, result
-    , (err, errors) =>
+    , (err, @errors) =>
+      console.log "Field.validate : #{@name} : #{errors}"
       @isValid = errors.length is 0
-      callback err, errors
+      callback err, @errors
 
   toHTML:   (args...) ->
     html = []
     html.push @widget.toHTML @
     return html.join ''
-    # defaultParts = ['widget']
-    # parts = []
-    # html = []
-    # for arg in args
-    #   parts.push arg if ['label', 'widget'].indexOf(arg) isnt -1
 
-    # if parts.length is 0
-    #   parts = defaultParts
+  _bind:     (@data, @form) ->
+    @bound   = true
+    @errors  = []
 
-    # for part in parts
-    #   if part is 'label'
-    #     html.push "<label for=\"id_#{@name}\">#{_s.capitalize(@label)}</label>"
-    #   if part is 'widget'
-    #     html.push @widget.toHTML @, ''
-
-    # html.join ''
-
-  bind:     (data, form) -> new BoundField @, data, form
-  isBound:  -> false
   getLabel: -> @label or @name
   classes:  -> []
-
-
 
 class StringField   extends Field
 class TextField     extends Field
@@ -150,7 +135,7 @@ exports.String        = StringField
 exports.Password      = PasswordField
 exports.Date          = DateField
 exports.Number        = NumberField
-exports.BoundedField  = BoundField
+# exports.BoundedField  = BoundField
 exports.getFieldClass = (fieldType) ->
   return fieldType     if fieldType instanceof Field
 
